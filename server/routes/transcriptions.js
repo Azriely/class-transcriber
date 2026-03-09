@@ -18,20 +18,36 @@ const upload = multer({
 router.use(authenticate);
 
 // POST /api/transcriptions/transcribe — upload and transcribe audio
+// Uses SSE (Server-Sent Events) to stream progress and avoid Cloudflare 524 timeouts
 router.post('/transcribe', upload.single('audio'), async (req, res) => {
   let chunks = [];
   const tempFile = req.file?.path;
 
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No audio file provided' });
-    }
+  if (!req.file) {
+    return res.status(400).json({ error: 'No audio file provided' });
+  }
 
+  // Set up SSE headers to keep connection alive
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
+  function sendEvent(data) {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  try {
     const { title, language } = req.body;
     const audioLanguage = language || 'pt';
     const transcriptionTitle = title || req.file.originalname || 'Untitled';
 
+    sendEvent({ type: 'progress', message: 'Splitting audio...', progress: 5 });
+
     chunks = chunkAudioFile(tempFile, req.file.originalname);
+
+    sendEvent({ type: 'progress', message: `Processing ${chunks.length} chunk(s)...`, progress: 10 });
 
     // Transcribe each chunk with rate-limit delay between them
     const parts = [];
@@ -39,11 +55,18 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       if (i > 0) {
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
+      sendEvent({
+        type: 'progress',
+        message: `Transcribing chunk ${i + 1} of ${chunks.length}...`,
+        progress: 10 + Math.round((i / chunks.length) * 80),
+      });
       const text = await transcribeAudio(chunks[i], audioLanguage, req.file.originalname);
       parts.push(text);
     }
 
     const fullTranscript = parts.join(' ');
+
+    sendEvent({ type: 'progress', message: 'Saving...', progress: 95 });
 
     // Save to database
     const stmt = db.prepare(
@@ -51,8 +74,9 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     );
     const result = stmt.run(req.userId, transcriptionTitle, audioLanguage, fullTranscript, req.file.size);
 
-    res.status(201).json({
-      id: result.lastInsertRowid,
+    sendEvent({
+      type: 'complete',
+      id: Number(result.lastInsertRowid),
       title: transcriptionTitle,
       audio_language: audioLanguage,
       transcript: fullTranscript,
@@ -61,13 +85,13 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     });
   } catch (err) {
     console.error('Transcription error:', err);
-    res.status(500).json({ error: err.message || 'Transcription failed' });
+    sendEvent({ type: 'error', error: err.message || 'Transcription failed' });
   } finally {
-    // Clean up temp files
     cleanupChunks(chunks, tempFile);
     if (tempFile) {
       try { fs.unlinkSync(tempFile); } catch {}
     }
+    res.end();
   }
 });
 

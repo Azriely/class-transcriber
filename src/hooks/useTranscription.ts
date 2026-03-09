@@ -9,11 +9,10 @@ export type TranscriptionStatus =
   | 'complete'
   | 'error';
 
-interface TranscribeResponse {
+interface TranscribeResult {
   id: number;
   title: string;
   transcript: string;
-  createdAt: string;
 }
 
 interface SummarizeResponse {
@@ -42,12 +41,12 @@ export function useTranscription() {
   const [state, setState] = useState<TranscriptionState>(initialState);
 
   const uploadAndTranscribe = useCallback(
-    async (file: File, language: string, title?: string) => {
+    async (file: File, language: string, title?: string): Promise<TranscribeResult> => {
       setState((prev) => ({
         ...prev,
         status: 'uploading',
         error: null,
-        progress: 10,
+        progress: 5,
       }));
 
       const formData = new FormData();
@@ -61,23 +60,73 @@ export function useTranscription() {
         setState((prev) => ({
           ...prev,
           status: 'transcribing',
-          progress: 40,
+          progress: 10,
         }));
 
-        const data = await api.postMultipart<TranscribeResponse>(
-          '/transcriptions/transcribe',
-          formData,
-        );
+        // Stream the response (SSE) to get progress updates
+        const response = await fetch('/api/transcriptions/transcribe', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
 
-        setState((prev) => ({
-          ...prev,
-          status: 'complete',
-          transcript: data.transcript,
-          transcriptionId: data.id,
-          progress: 100,
-        }));
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(err || 'Transcription failed');
+        }
 
-        return data;
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response stream');
+
+        const decoder = new TextDecoder();
+        let result: TranscribeResult | null = null;
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events from buffer
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === 'progress') {
+                setState((prev) => ({
+                  ...prev,
+                  progress: event.progress ?? prev.progress,
+                }));
+              } else if (event.type === 'complete') {
+                result = {
+                  id: event.id,
+                  title: event.title,
+                  transcript: event.transcript,
+                };
+                setState((prev) => ({
+                  ...prev,
+                  status: 'complete',
+                  transcript: event.transcript,
+                  transcriptionId: event.id,
+                  progress: 100,
+                }));
+              } else if (event.type === 'error') {
+                throw new Error(event.error);
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof SyntaxError) continue; // skip malformed lines
+              throw parseErr;
+            }
+          }
+        }
+
+        if (!result) throw new Error('No result received');
+        return result;
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Transcription failed';
