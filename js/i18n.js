@@ -7,8 +7,10 @@ const translations = {
     upload: {
       title: 'Upload Audio',
       dragDrop: 'Drag & drop your audio file here',
+      or: 'or',
       browse: 'Browse files',
       formats: 'Supported: MP3, M4A, WAV, OGG, WebM',
+      remove: 'Remove',
     },
     transcript: {
       title: 'Transcription',
@@ -26,6 +28,7 @@ const translations = {
       title: 'Settings',
       apiKey: 'Groq API Key',
       apiKeyPlaceholder: 'Enter your Groq API key',
+      apiKeyHelp: 'Get a free API key at',
       save: 'Save',
       language: 'Audio Language',
     },
@@ -37,6 +40,7 @@ const translations = {
       transcribing: 'Transcribing...',
       chunk: 'Processing chunk {current} of {total}',
       summarizing: 'Generating summary...',
+      cancel: 'Cancel',
     },
     error: {
       noApiKey: 'Please set your Groq API key in settings',
@@ -52,8 +56,10 @@ const translations = {
     upload: {
       title: 'Enviar Áudio',
       dragDrop: 'Arraste e solte seu arquivo de áudio aqui',
+      or: 'ou',
       browse: 'Procurar arquivos',
       formats: 'Formatos: MP3, M4A, WAV, OGG, WebM',
+      remove: 'Remover',
     },
     transcript: {
       title: 'Transcrição',
@@ -71,6 +77,7 @@ const translations = {
       title: 'Configurações',
       apiKey: 'Chave API do Groq',
       apiKeyPlaceholder: 'Digite sua chave API do Groq',
+      apiKeyHelp: 'Obtenha uma chave API gratuita em',
       save: 'Salvar',
       language: 'Idioma do Áudio',
     },
@@ -82,6 +89,7 @@ const translations = {
       transcribing: 'Transcrevendo...',
       chunk: 'Processando parte {current} de {total}',
       summarizing: 'Gerando resumo...',
+      cancel: 'Cancelar',
     },
     error: {
       noApiKey: 'Por favor, configure sua chave API do Groq nas configurações',
