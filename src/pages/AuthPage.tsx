@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../hooks/useI18n';
 import { useTheme } from '../hooks/useTheme';
+import { ApiError } from '../lib/api';
 import GlassCard from '../components/GlassCard';
 
 export default function AuthPage() {
-  const { login, register } = useAuth();
+  const { isAuthenticated, isLoading, login, register } = useAuth();
   const { t, language, setLanguage } = useI18n();
   const { theme, toggleTheme } = useTheme();
 
@@ -31,12 +32,15 @@ export default function AuthPage() {
         await register(email, password, displayName);
       }
       navigate('/');
-    } catch {
-      setError(t('authError'));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('authError'));
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  if (isLoading) return null;
+  if (isAuthenticated) return <Navigate to="/" replace />;
 
   return (
     <div className="bg-blobs min-h-screen flex items-center justify-center px-4">
