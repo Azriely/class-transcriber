@@ -1,5 +1,5 @@
 import { createI18n } from './i18n.js';
-import { loadSettings, saveSettings, saveTranscription, getHistory, deleteHistoryItem } from './storage.js';
+import { loadSettings, saveSettings, saveTranscription, getHistory, deleteHistoryItem, updateHistoryItem } from './storage.js';
 import { chunkFile } from './audio-chunker.js';
 import { GroqWhisperProvider } from './providers/transcription.js';
 import { GroqLlamaProvider } from './providers/summarization.js';
@@ -75,6 +75,11 @@ function handleFileSelect(file) {
   $('#file-size').textContent = formatFileSize(file.size);
   $('#upload-zone').setAttribute('hidden', '');
   $('#file-info').removeAttribute('hidden');
+
+  // File size warning for large files (> 200MB)
+  if (file.size > 200 * 1024 * 1024) {
+    showToast('Large file detected. Transcription may take several minutes.', 'toast-error');
+  }
 }
 
 function clearFile() {
@@ -82,18 +87,53 @@ function clearFile() {
   state.currentTitle = '';
   $('#file-input').value = '';
   $('#file-info').setAttribute('hidden', '');
+  $('#transcribe-btn').removeAttribute('hidden');
   $('#upload-zone').removeAttribute('hidden');
 }
 
 // ── Transcription ───────────────────────────────────────────────────
 
+async function transcribeChunkWithRetry(provider, chunk, language, fileName, chunkIndex, totalChunks) {
+  const retryDelays = [2000, 5000, 10000];
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    try {
+      return await provider.transcribe(chunk, language, fileName);
+    } catch (err) {
+      lastError = err;
+      const is429 = err.message && err.message.includes('(429)');
+      if (is429 && attempt < retryDelays.length) {
+        $('#progress-text').textContent = 'Rate limited, retrying...';
+        await delay(retryDelays[attempt]);
+        // Restore chunk progress text after retry wait
+        $('#progress-text').textContent = state.i18n.t('progress.chunk')
+          .replace('{current}', chunkIndex + 1)
+          .replace('{total}', totalChunks);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 async function startTranscription() {
   if (!state.settings.groqApiKey) {
-    showToast(state.i18n.t('error.noApiKey'), 'toast-error');
+    showToast('Please set your Groq API key in Settings', 'toast-error');
+    openSettings();
     return;
   }
+
+  const transcribeBtn = $('#transcribe-btn');
+  transcribeBtn.disabled = true;
+  transcribeBtn.textContent = 'Transcribing...';
+
   state.isTranscribing = true;
   state.abortController = new AbortController();
+
+  // Disable upload zone during transcription
+  $('#upload-zone').classList.add('disabled');
 
   $('#file-info').setAttribute('hidden', '');
   $('#progress-section').removeAttribute('hidden');
@@ -114,10 +154,13 @@ async function startTranscription() {
         .replace('{current}', i + 1)
         .replace('{total}', chunks.length);
 
-      const text = await provider.transcribe(
+      const text = await transcribeChunkWithRetry(
+        provider,
         chunks[i],
         state.settings.audioLanguage,
         state.selectedFile.name,
+        i,
+        chunks.length,
       );
       results.push(text);
 
@@ -134,6 +177,13 @@ async function startTranscription() {
     state.currentTranscript = results.join(' ');
     state.currentSummary = '';
 
+    // Check for empty transcription
+    if (!state.currentTranscript.trim()) {
+      showToast('No speech detected in audio', 'toast-error');
+      restoreUploadUI();
+      return;
+    }
+
     $('#progress-section').setAttribute('hidden', '');
     $('#transcript-section').removeAttribute('hidden');
     $('#transcript-text').textContent = state.currentTranscript;
@@ -146,14 +196,22 @@ async function startTranscription() {
       date: new Date().toISOString(),
     });
     renderHistory();
+
+    // Auto-scroll to transcript section
+    $('#transcript-section').scrollIntoView({ behavior: 'smooth' });
   } catch (err) {
     if (!state.abortController.signal.aborted) {
-      showToast(`${state.i18n.t('error.transcriptionFailed')}: ${err.message}`, 'toast-error');
+      const statusMatch = err.message && err.message.match(/\((\d+)\)/);
+      const statusInfo = statusMatch ? ` (HTTP ${statusMatch[1]})` : '';
+      showToast(`${state.i18n.t('error.transcriptionFailed')}${statusInfo}: ${err.message}`, 'toast-error');
     }
     restoreUploadUI();
   } finally {
     state.isTranscribing = false;
     state.abortController = null;
+    transcribeBtn.disabled = false;
+    transcribeBtn.textContent = state.i18n.t('upload.title');
+    $('#upload-zone').classList.remove('disabled');
   }
 }
 
@@ -176,13 +234,15 @@ function cancelTranscription() {
 
 async function startSummarization() {
   if (!state.settings.groqApiKey) {
-    showToast(state.i18n.t('error.noApiKey'), 'toast-error');
+    showToast('Please set your Groq API key in Settings', 'toast-error');
+    openSettings();
     return;
   }
-  state.isSummarizing = true;
+
   const summarizeBtn = $('#summarize-btn');
   summarizeBtn.disabled = true;
-  summarizeBtn.textContent = state.i18n.t('progress.summarizing');
+  summarizeBtn.textContent = 'Generating...';
+  state.isSummarizing = true;
 
   try {
     const provider = new GroqLlamaProvider(state.settings.groqApiKey);
@@ -195,14 +255,14 @@ async function startSummarization() {
     $('#summary-section').removeAttribute('hidden');
     $('#summary-text').textContent = summary;
 
-    // Update the most recent history entry with the summary
+    // Update the history entry with the summary using storage module
     const history = getHistory();
     const entry = history.find(h => h.title === state.currentTitle);
     if (entry) {
-      entry.summary = summary;
-      localStorage.setItem('transcriber_history', JSON.stringify(history));
+      updateHistoryItem(entry.id, { summary });
     }
   } catch (err) {
+    // Keep transcript visible and intact if summarization fails
     showToast(err.message, 'toast-error');
   } finally {
     state.isSummarizing = false;
@@ -272,10 +332,17 @@ function loadHistoryItem(id) {
   state.currentTranscript = item.transcript;
   state.currentSummary = item.summary || '';
   state.currentTitle = item.title;
+  state.selectedFile = null;
 
   $('#upload-zone').setAttribute('hidden', '');
-  $('#file-info').setAttribute('hidden', '');
   $('#progress-section').setAttribute('hidden', '');
+
+  // Show file info with the history item's title
+  $('#file-name').textContent = item.title;
+  $('#file-size').textContent = formatDate(item.date);
+  $('#file-info').removeAttribute('hidden');
+  // Hide transcribe button since this is already transcribed
+  $('#transcribe-btn').setAttribute('hidden', '');
 
   $('#transcript-section').removeAttribute('hidden');
   $('#transcript-text').textContent = item.transcript;
@@ -391,7 +458,7 @@ function bindEvents() {
   $('#copy-transcript-btn').addEventListener('click', async () => {
     try {
       await copyToClipboard(state.currentTranscript);
-      showToast(state.i18n.t('transcript.copy'), 'toast-success');
+      showToast('Copied!', 'toast-success');
     } catch {
       showToast('Copy failed', 'toast-error');
     }
@@ -405,7 +472,7 @@ function bindEvents() {
   $('#copy-summary-btn').addEventListener('click', async () => {
     try {
       await copyToClipboard(state.currentSummary);
-      showToast(state.i18n.t('summary.copy'), 'toast-success');
+      showToast('Copied!', 'toast-success');
     } catch {
       showToast('Copy failed', 'toast-error');
     }

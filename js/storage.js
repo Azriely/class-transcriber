@@ -34,6 +34,14 @@ export function saveTranscription({ title, transcript, summary, date }) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
+export function updateHistoryItem(id, updates) {
+  const history = getHistory();
+  const index = history.findIndex(item => item.id === id);
+  if (index === -1) return;
+  history[index] = { ...history[index], ...updates };
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
 export function deleteHistoryItem(id) {
   const history = getHistory().filter(item => item.id !== id);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));

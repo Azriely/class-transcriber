@@ -797,6 +797,20 @@ select.form-input {
   }
 }
 
+/* ===== Disabled States ===== */
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Disabled upload zone during transcription */
+.upload-zone.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* ===== Utility: Hidden ===== */
 [hidden] {
   display: none !important;

@@ -10,7 +10,7 @@ globalThis.localStorage = {
   clear: () => { for (const key in storage) delete storage[key]; }
 };
 
-const { saveSettings, loadSettings, saveTranscription, getHistory, deleteHistoryItem } = await import('./storage.js');
+const { saveSettings, loadSettings, saveTranscription, getHistory, deleteHistoryItem, updateHistoryItem } = await import('./storage.js');
 
 describe('storage - settings', () => {
   beforeEach(() => localStorage.clear());
@@ -60,5 +60,23 @@ describe('storage - history', () => {
     const history = getHistory();
     deleteHistoryItem(history[0].id);
     assert.deepEqual(getHistory(), []);
+  });
+
+  it('updates a history item by id', () => {
+    saveTranscription({ title: 'Class 1', transcript: 'a', summary: '', date: '2026-03-09' });
+    const history = getHistory();
+    updateHistoryItem(history[0].id, { summary: 'A summary' });
+    const updated = getHistory();
+    assert.equal(updated[0].summary, 'A summary');
+    assert.equal(updated[0].title, 'Class 1');
+    assert.equal(updated[0].transcript, 'a');
+  });
+
+  it('does nothing when updating non-existent id', () => {
+    saveTranscription({ title: 'Class 1', transcript: 'a', summary: '', date: '2026-03-09' });
+    updateHistoryItem('non-existent', { summary: 'fail' });
+    const history = getHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].summary, '');
   });
 });
