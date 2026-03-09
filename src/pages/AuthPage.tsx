@@ -150,7 +150,7 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-lg bg-violet-600 hover:bg-violet-700
+            className="btn-glow w-full rounded-lg bg-violet-600 hover:bg-violet-700
                        disabled:opacity-50 disabled:cursor-not-allowed
                        px-4 py-2.5 text-sm font-semibold text-white
                        transition cursor-pointer"

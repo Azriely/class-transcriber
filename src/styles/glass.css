@@ -120,6 +120,29 @@
   background: radial-gradient(circle, rgba(59, 130, 246, 0.25) 0%, rgba(6, 182, 212, 0.2) 50%, transparent 70%);
 }
 
+/* Third blob (real element inside .bg-blobs) */
+.animated-blob-3 {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+  animation: blob-drift-3 22s ease-in-out infinite alternate;
+}
+
+[data-theme="dark"] .animated-blob-3 {
+  background: radial-gradient(circle, #10b981 0%, transparent 70%);
+}
+
+[data-theme="light"] .animated-blob-3 {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, transparent 70%);
+}
+
 /* Blob animations */
 @keyframes blob-drift-1 {
   0% {
@@ -143,6 +166,63 @@
   100% {
     transform: translate(-40px, 40px) scale(0.9);
   }
+}
+
+@keyframes blob-drift-3 {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-30%, -70%) scale(1.2);
+  }
+  100% {
+    transform: translate(-70%, -40%) scale(0.9);
+  }
+}
+
+/* ============================================
+   Button glow on hover
+   ============================================
+   Apply .btn-glow to primary action buttons for
+   a subtle purple glow on hover.
+   ============================================ */
+
+.btn-glow {
+  transition: box-shadow 200ms ease, background-color 200ms ease;
+}
+
+.btn-glow:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.2);
+}
+
+/* ============================================
+   Drag-over pulse
+   ============================================ */
+
+@keyframes drag-pulse {
+  0%, 100% {
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+  50% {
+    border-color: rgba(168, 85, 247, 0.8);
+  }
+}
+
+.drag-pulse {
+  animation: drag-pulse 1.5s ease-in-out infinite;
+}
+
+/* ============================================
+   Page fade-in
+   ============================================ */
+
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page-enter {
+  animation: page-fade-in 0.4s ease-out;
 }
 
 /* ============================================

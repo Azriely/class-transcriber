@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../hooks/useI18n';
 import { useTheme } from '../hooks/useTheme';
+import AnimatedBackground from './AnimatedBackground';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +15,8 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <AnimatedBackground />
+
       {/* Header */}
       <header className="glass-strong sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
         <h1 className="text-lg font-bold tracking-tight">{t('appTitle')}</h1>
@@ -55,7 +58,7 @@ export default function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1 p-6 page-enter">{children}</main>
     </div>
   );
 }

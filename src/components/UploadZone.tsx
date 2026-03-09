@@ -154,7 +154,7 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
   const displayError = validationError || error;
 
   return (
-    <div className="glass rounded-2xl p-8">
+    <div className="glass rounded-2xl p-8 animate-[fadeIn_0.5s_ease-out]">
       <h2 className="text-xl font-semibold mb-2">{t('uploadTitle')}</h2>
       <p className="text-sm opacity-70 mb-6">{t('uploadDescription')}</p>
 
@@ -168,7 +168,7 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
           glass-subtle rounded-xl p-10 text-center cursor-pointer
           transition-all duration-200 border-2 border-dashed
           ${dragOver
-            ? 'border-purple-400 bg-purple-500/10 scale-[1.02]'
+            ? 'border-purple-400 bg-purple-500/10 scale-[1.02] drag-pulse'
             : 'border-white/10 hover:border-white/20'
           }
           ${isBusy ? 'pointer-events-none opacity-60' : ''}
@@ -267,10 +267,10 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
           type="button"
           onClick={handleTranscribe}
           disabled={isBusy || !file}
-          className="px-6 py-2.5 rounded-xl font-medium text-sm
+          className="btn-glow px-6 py-2.5 rounded-xl font-medium text-sm
                      bg-purple-600 hover:bg-purple-500 text-white
                      transition-colors duration-200
-                     disabled:opacity-40 disabled:cursor-not-allowed"
+                     disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           {status === 'uploading' || status === 'transcribing'
             ? t('transcribing')
@@ -297,7 +297,8 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
         <div className="mt-4">
           <div className="h-1 rounded-full bg-white/10 overflow-hidden">
             <div
-              className="h-full rounded-full bg-purple-500 transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-purple-500 transition-all duration-500 ease-out
+                         shadow-[0_0_8px_rgba(168,85,247,0.6)]"
               style={{ width: `${progress}%` }}
             />
           </div>

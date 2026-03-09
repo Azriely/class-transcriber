@@ -77,11 +77,11 @@ export default function TranscriptPanel({
             type="button"
             onClick={onGenerateSummary}
             disabled={isSummarizing || !transcript}
-            className="w-full px-5 py-2.5 rounded-xl font-medium text-sm
+            className="btn-glow w-full px-5 py-2.5 rounded-xl font-medium text-sm
                        bg-purple-600 hover:bg-purple-500 text-white
                        transition-colors duration-200
                        disabled:opacity-40 disabled:cursor-not-allowed
-                       flex items-center justify-center gap-2"
+                       flex items-center justify-center gap-2 cursor-pointer"
           >
             {isSummarizing && (
               <svg
