@@ -39,7 +39,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       if (i > 0) {
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
-      const text = await transcribeAudio(chunks[i], audioLanguage);
+      const text = await transcribeAudio(chunks[i], audioLanguage, req.file.originalname);
       parts.push(text);
     }
 

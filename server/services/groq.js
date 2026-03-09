@@ -4,11 +4,12 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const WHISPER_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-export async function transcribeAudio(filePath, language = 'pt') {
+export async function transcribeAudio(filePath, language = 'pt', originalName = 'audio.mp3') {
+  const ext = originalName.match(/\.[^.]+$/)?.[0] || '.mp3';
   const fileBuffer = fs.readFileSync(filePath);
   const blob = new Blob([fileBuffer]);
   const formData = new FormData();
-  formData.append('file', blob, 'audio.mp3');
+  formData.append('file', blob, `audio${ext}`);
   formData.append('model', 'whisper-large-v3');
   formData.append('language', language);
   formData.append('response_format', 'text');
