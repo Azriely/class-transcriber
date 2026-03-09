@@ -7,11 +7,6 @@
   padding: 0;
 }
 
-body {
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-
 img, picture, video, canvas, svg {
   display: block;
   max-width: 100%;
@@ -59,6 +54,8 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
   min-height: 100vh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 #app {
