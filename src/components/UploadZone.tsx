@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
 import { useTranscription } from '../hooks/useTranscription';
 import { useI18n } from '../hooks/useI18n';
 
@@ -21,6 +21,7 @@ interface UploadZoneProps {
     transcript: string;
     title: string;
   }) => void;
+  onStatusChange?: (status: string) => void;
 }
 
 function isValidAudioFile(file: File): boolean {
@@ -36,7 +37,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function UploadZone({ onTranscriptionComplete }: UploadZoneProps) {
+export default function UploadZone({ onTranscriptionComplete, onStatusChange }: UploadZoneProps) {
   const { t } = useI18n();
   const {
     status,
@@ -45,6 +46,11 @@ export default function UploadZone({ onTranscriptionComplete }: UploadZoneProps)
     uploadAndTranscribe,
     reset,
   } = useTranscription();
+
+  // Notify parent of status changes for orb state tracking
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
 
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState<string>('pt');
