@@ -62,7 +62,7 @@ export function useTranscription() {
   }, []);
 
   const uploadAndTranscribe = useCallback(
-    async (file: File, language: string, title?: string): Promise<TranscribeResult> => {
+    async (file: File, language: string, title?: string, subject?: string): Promise<TranscribeResult> => {
       setState((prev) => ({
         ...prev,
         status: 'uploading',
@@ -76,6 +76,9 @@ export function useTranscription() {
       formData.append('language', language);
       if (title) {
         formData.append('title', title);
+      }
+      if (subject) {
+        formData.append('subject', subject);
       }
 
       try {

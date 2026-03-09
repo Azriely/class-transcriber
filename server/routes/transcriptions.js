@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { authenticate } from '../middleware/auth.js';
 import { transcribeAudio, summarizeTranscript } from '../services/groq.js';
-import { chunkAudioFile, cleanupChunks } from '../services/chunker.js';
+import { chunkAudioFile, cleanupChunks, preprocessAudio } from '../services/chunker.js';
 import db from '../db.js';
 
 const router = Router();
@@ -27,9 +27,10 @@ router.post('/transcribe', upload.single('audio'), (req, res) => {
     return res.status(400).json({ error: 'No audio file provided' });
   }
 
-  const { title, language } = req.body;
+  const { title, language, subject } = req.body;
   const audioLanguage = language || 'pt';
   const transcriptionTitle = title || req.file.originalname || 'Untitled';
+  const subjectHint = subject || '';
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   // Copy uploaded file to a persistent temp location (multer may clean up)
@@ -51,18 +52,24 @@ router.post('/transcribe', upload.single('audio'), (req, res) => {
   res.status(202).json({ jobId });
 
   // Process in background
-  processTranscription(jobId, persistPath, req.file.originalname, audioLanguage, transcriptionTitle, req.userId, req.file.size);
+  processTranscription(jobId, persistPath, req.file.originalname, audioLanguage, transcriptionTitle, req.userId, req.file.size, subjectHint);
 });
 
-async function processTranscription(jobId, filePath, originalName, language, title, userId, fileSize) {
+async function processTranscription(jobId, filePath, originalName, language, title, userId, fileSize, subjectHint = '') {
   let chunks = [];
+  let preprocessedPath = null;
   const job = jobs.get(jobId);
 
   try {
+    job.message = 'Preprocessing audio...';
+    job.progress = 5;
+
+    preprocessedPath = preprocessAudio(filePath, originalName);
+
     job.message = 'Splitting audio...';
     job.progress = 10;
 
-    chunks = chunkAudioFile(filePath, originalName);
+    chunks = chunkAudioFile(preprocessedPath, originalName);
 
     job.message = `Processing ${chunks.length} chunk(s)...`;
 
@@ -75,7 +82,7 @@ async function processTranscription(jobId, filePath, originalName, language, tit
       job.message = `Transcribing chunk ${i + 1} of ${chunks.length}...`;
       job.progress = 10 + Math.round((i / chunks.length) * 80);
 
-      const text = await transcribeAudio(chunks[i], language, originalName, (msg) => {
+      const text = await transcribeAudio(chunks[i], language, originalName, subjectHint, (msg) => {
         job.message = msg;
       });
       parts.push(text);
@@ -105,7 +112,10 @@ async function processTranscription(jobId, filePath, originalName, language, tit
     job.error = err.message || 'Transcription failed';
     job.message = job.error;
   } finally {
-    cleanupChunks(chunks, filePath);
+    cleanupChunks(chunks, preprocessedPath || filePath);
+    if (preprocessedPath && preprocessedPath !== filePath) {
+      try { fs.unlinkSync(preprocessedPath); } catch {}
+    }
     try { fs.unlinkSync(filePath); } catch {}
 
     // Clean up job from memory after 10 minutes

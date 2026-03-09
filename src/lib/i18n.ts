@@ -42,6 +42,11 @@ export const translations = {
   selectLanguage: { en: 'Audio Language', pt: 'Idioma do Áudio' },
   portuguese: { en: 'Portuguese', pt: 'Português' },
   english: { en: 'English', pt: 'Inglês' },
+  subject: { en: 'Subject / Topic', pt: 'Disciplina / Tema' },
+  subjectPlaceholder: {
+    en: 'e.g. Criminal Law, Molecular Biology...',
+    pt: 'ex. Direito Penal, Biologia Molecular...',
+  },
 
   // Transcript / Summary
   transcription: { en: 'Transcription', pt: 'Transcrição' },

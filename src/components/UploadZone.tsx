@@ -56,6 +56,7 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState<string>('pt');
   const [title, setTitle] = useState('');
+  const [subject, setSubject] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +131,7 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
         file,
         language,
         title || undefined,
+        subject || undefined,
       );
 
       onTranscriptionComplete?.({
@@ -140,12 +142,13 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
     } catch {
       // Error is already captured in the hook state
     }
-  }, [file, language, title, uploadAndTranscribe, onTranscriptionComplete, t]);
+  }, [file, language, title, subject, uploadAndTranscribe, onTranscriptionComplete, t]);
 
   const handleReset = useCallback(() => {
     reset();
     setFile(null);
     setTitle('');
+    setSubject('');
     setValidationError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -220,8 +223,8 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
         )}
       </div>
 
-      {/* Language selector + title */}
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Language selector + title + subject */}
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1 opacity-80">
             {t('selectLanguage')}
@@ -248,6 +251,22 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
             onChange={(e) => setTitle(e.target.value)}
             disabled={isBusy}
             placeholder={t('optional')}
+            className="w-full glass-subtle rounded-lg px-3 py-2 text-sm bg-transparent outline-none
+                       focus:ring-2 focus:ring-purple-500/40 disabled:opacity-50
+                       placeholder:opacity-40"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1 opacity-80">
+            {t('subject')}
+          </label>
+          <input
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            disabled={isBusy}
+            placeholder={t('subjectPlaceholder')}
             className="w-full glass-subtle rounded-lg px-3 py-2 text-sm bg-transparent outline-none
                        focus:ring-2 focus:ring-purple-500/40 disabled:opacity-50
                        placeholder:opacity-40"

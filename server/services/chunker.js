@@ -6,6 +6,32 @@ import { execSync } from 'child_process';
 const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB
 
 /**
+ * Preprocess audio: normalize volume and apply light noise reduction.
+ * Returns path to the preprocessed file (or original if preprocessing fails).
+ */
+export function preprocessAudio(filePath, originalName = 'audio.mp3') {
+  const ext = originalName.match(/\.[^.]+$/)?.[0] || '.mp3';
+  const outPath = path.join(os.tmpdir(), `preproc-${Date.now()}${ext}`);
+
+  try {
+    // Two-pass loudnorm for proper normalization + highpass to cut low rumble
+    execSync(
+      `ffmpeg -v error -i "${filePath}" -af "highpass=f=80,lowpass=f=8000,loudnorm=I=-16:TP=-1.5:LRA=11" -ar 16000 -ac 1 "${outPath}"`,
+      { encoding: 'utf-8', timeout: 120000 }
+    );
+
+    if (fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+      return outPath;
+    }
+  } catch (err) {
+    console.warn('Audio preprocessing failed, using original:', err.message);
+    try { fs.unlinkSync(outPath); } catch {}
+  }
+
+  return filePath;
+}
+
+/**
  * Split an audio file into chunks that the Whisper API can handle.
  * Uses ffmpeg to properly split container formats (m4a, mp4, etc.)
  * so each chunk is a valid, self-contained audio file.

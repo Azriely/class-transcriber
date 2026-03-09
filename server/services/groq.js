@@ -35,9 +35,10 @@ function getRetryDelay(response, attempt) {
  * @param {string} filePath
  * @param {string} language
  * @param {string} originalName
+ * @param {string} [subjectHint] - Subject/vocabulary hint passed to Whisper as prompt
  * @param {function} [onProgress] - Called with status messages during retries
  */
-export async function transcribeAudio(filePath, language = 'pt', originalName = 'audio.mp3', onProgress = null) {
+export async function transcribeAudio(filePath, language = 'pt', originalName = 'audio.mp3', subjectHint = '', onProgress = null) {
   const ext = originalName.match(/\.[^.]+$/)?.[0] || '.mp3';
   const fileBuffer = fs.readFileSync(filePath);
   const blob = new Blob([fileBuffer]);
@@ -48,6 +49,11 @@ export async function transcribeAudio(filePath, language = 'pt', originalName = 
     formData.append('model', 'whisper-large-v3');
     formData.append('language', language);
     formData.append('response_format', 'text');
+
+    // Whisper's prompt parameter helps with domain-specific vocabulary and names
+    if (subjectHint) {
+      formData.append('prompt', subjectHint);
+    }
 
     const response = await fetch(WHISPER_URL, {
       method: 'POST',
@@ -80,7 +86,7 @@ export async function transcribeAudio(filePath, language = 'pt', originalName = 
 const MAX_CHUNK_CHARS = 28000; // ~7000 tokens, leaves room for system prompt + response
 
 /** Call Llama chat API with retry on 429 */
-async function chatCompletion(systemPrompt, userContent) {
+async function chatCompletion(systemPrompt, userContent, maxTokens = 4096) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(CHAT_URL, {
       method: 'POST',
@@ -95,7 +101,7 @@ async function chatCompletion(systemPrompt, userContent) {
           { role: 'user', content: userContent },
         ],
         temperature: 0.3,
-        max_tokens: 2048,
+        max_tokens: maxTokens,
       }),
     });
 
@@ -150,18 +156,142 @@ export async function summarizeTranscript(transcript, language = 'pt') {
   const chunks = splitTranscript(transcript, MAX_CHUNK_CHARS);
 
   const chunkPrompt = language === 'pt'
-    ? 'Você é um assistente que resume aulas universitárias em português. Resuma esta parte da transcrição com os pontos principais, conceitos-chave e tarefas mencionadas.'
-    : 'You are an assistant that summarizes university lectures in English. Summarize this part of the transcript with key points, key concepts, and any assignments mentioned.';
+    ? `Você é um assistente especializado em resumir aulas universitárias em português. Analise esta parte da transcrição e extraia TODOS os detalhes importantes:
+
+- Conceitos e definições explicados pelo professor
+- Exemplos e casos práticos mencionados
+- Teorias, fórmulas, ou frameworks apresentados
+- Referências a autores, livros ou artigos
+- Conexões entre tópicos
+- Perguntas dos alunos e respostas do professor
+- Tarefas, trabalhos ou leituras recomendadas
+
+Seja detalhado e completo. Não omita informações relevantes.`
+    : `You are an assistant specialized in summarizing university lectures. Analyze this part of the transcript and extract ALL important details:
+
+- Concepts and definitions explained by the professor
+- Examples and practical cases mentioned
+- Theories, formulas, or frameworks presented
+- References to authors, books, or articles
+- Connections between topics
+- Student questions and professor answers
+- Assignments, homework, or recommended readings
+
+Be detailed and thorough. Do not omit relevant information.`;
 
   const mergePrompt = language === 'pt'
-    ? 'Você é um assistente que resume aulas universitárias em português. Combine estes resumos parciais em um resumo final conciso com: título/tema, 5-10 pontos principais, conceitos-chave, e tarefas mencionadas.'
-    : 'You are an assistant that summarizes university lectures in English. Combine these partial summaries into one final concise summary with: title/topic, 5-10 key points, key concepts, and any assignments mentioned.';
+    ? `Você é um assistente especializado em resumir aulas universitárias em português. Combine estes resumos parciais em um resumo final DETALHADO e bem estruturado. Use o seguinte formato:
+
+## Tema da Aula
+[Título/tema principal]
+
+## Visão Geral
+[2-3 parágrafos resumindo o conteúdo geral da aula]
+
+## Conceitos e Definições
+[Lista detalhada de todos os conceitos explicados, com suas definições]
+
+## Pontos Principais
+[Lista numerada com explicação de cada ponto, não apenas tópicos]
+
+## Exemplos e Casos Práticos
+[Exemplos mencionados pelo professor]
+
+## Referências
+[Autores, livros, artigos mencionados]
+
+## Tarefas e Próximos Passos
+[Trabalhos, leituras, ou atividades mencionadas]
+
+## Observações Adicionais
+[Detalhes extras relevantes, perguntas de alunos, etc.]
+
+Seja completo e detalhado. Este resumo deve servir como material de estudo.`
+    : `You are an assistant specialized in summarizing university lectures. Combine these partial summaries into a DETAILED, well-structured final summary. Use the following format:
+
+## Lecture Topic
+[Main title/topic]
+
+## Overview
+[2-3 paragraphs summarizing the overall lecture content]
+
+## Concepts and Definitions
+[Detailed list of all concepts explained, with their definitions]
+
+## Key Points
+[Numbered list with explanation of each point, not just topics]
+
+## Examples and Practical Cases
+[Examples mentioned by the professor]
+
+## References
+[Authors, books, articles mentioned]
+
+## Assignments and Next Steps
+[Homework, readings, or activities mentioned]
+
+## Additional Notes
+[Extra relevant details, student questions, etc.]
+
+Be thorough and detailed. This summary should serve as study material.`;
 
   // Single chunk — summarize directly
   if (chunks.length === 1) {
     const directPrompt = language === 'pt'
-      ? 'Você é um assistente que resume aulas universitárias em português. Gere um resumo conciso com: título/tema, 5-10 pontos principais, conceitos-chave, e tarefas mencionadas.'
-      : 'You are an assistant that summarizes university lectures in English. Generate a concise summary with: title/topic, 5-10 key points, key concepts, and any assignments mentioned.';
+      ? `Você é um assistente especializado em resumir aulas universitárias em português. Gere um resumo DETALHADO e bem estruturado da aula. Use o seguinte formato:
+
+## Tema da Aula
+[Título/tema principal]
+
+## Visão Geral
+[2-3 parágrafos resumindo o conteúdo geral da aula]
+
+## Conceitos e Definições
+[Lista detalhada de todos os conceitos explicados, com suas definições]
+
+## Pontos Principais
+[Lista numerada com explicação de cada ponto, não apenas tópicos]
+
+## Exemplos e Casos Práticos
+[Exemplos mencionados pelo professor]
+
+## Referências
+[Autores, livros, artigos mencionados]
+
+## Tarefas e Próximos Passos
+[Trabalhos, leituras, ou atividades mencionadas]
+
+## Observações Adicionais
+[Detalhes extras relevantes, perguntas de alunos, etc.]
+
+Seja completo e detalhado. Este resumo deve servir como material de estudo.`
+      : `You are an assistant specialized in summarizing university lectures. Generate a DETAILED, well-structured summary. Use the following format:
+
+## Lecture Topic
+[Main title/topic]
+
+## Overview
+[2-3 paragraphs summarizing the overall lecture content]
+
+## Concepts and Definitions
+[Detailed list of all concepts explained, with their definitions]
+
+## Key Points
+[Numbered list with explanation of each point, not just topics]
+
+## Examples and Practical Cases
+[Examples mentioned by the professor]
+
+## References
+[Authors, books, articles mentioned]
+
+## Assignments and Next Steps
+[Homework, readings, or activities mentioned]
+
+## Additional Notes
+[Extra relevant details, student questions, etc.]
+
+Be thorough and detailed. This summary should serve as study material.`;
     return chatCompletion(directPrompt, transcript);
   }
 
