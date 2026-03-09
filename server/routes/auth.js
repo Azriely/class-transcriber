@@ -31,7 +31,7 @@ function sanitizeUser(user) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, displayName } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -50,8 +50,8 @@ router.post('/register', async (req, res) => {
     const password_hash = await bcrypt.hash(password, 10);
 
     const result = db.prepare(
-      'INSERT INTO users (email, password_hash) VALUES (?, ?)'
-    ).run(email, password_hash);
+      'INSERT INTO users (email, password_hash, display_name) VALUES (?, ?, ?)'
+    ).run(email, password_hash, displayName || email.split('@')[0]);
 
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     const token = createToken(user.id);

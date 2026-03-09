@@ -37,6 +37,10 @@ async function handleResponse<T>(
     throw new ApiError(message, response.status);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json() as Promise<T>;
 }
 
@@ -48,7 +52,7 @@ function get<T>(path: string, options?: RequestOptions): Promise<T> {
   }).then((res) => handleResponse<T>(res, options));
 }
 
-function post<T>(path: string, body?: unknown): Promise<T> {
+function post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
   return fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     credentials: 'include',
@@ -57,7 +61,7 @@ function post<T>(path: string, body?: unknown): Promise<T> {
       'Accept': 'application/json',
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-  }).then((res) => handleResponse<T>(res));
+  }).then((res) => handleResponse<T>(res, options));
 }
 
 function postMultipart<T>(path: string, formData: FormData): Promise<T> {

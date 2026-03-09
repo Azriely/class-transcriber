@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await api.post<{ user: User }>('/auth/login', {
       email,
       password,
-    });
+    }, { noRedirect: true });
     setUser(data.user);
   }, []);
 
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         displayName,
-      });
+      }, { noRedirect: true });
       setUser(data.user);
     },
     [],
