@@ -40,6 +40,7 @@ export default function UploadZone({ onTranscriptionComplete }: UploadZoneProps)
   const { t } = useI18n();
   const {
     status,
+    progress,
     error,
     uploadAndTranscribe,
     reset,
@@ -61,14 +62,12 @@ export default function UploadZone({ onTranscriptionComplete }: UploadZoneProps)
     (incoming: File) => {
       setValidationError(null);
       if (!isValidAudioFile(incoming)) {
-        setValidationError(
-          'Invalid file type. Please upload an audio file (.mp3, .wav, .m4a, .ogg, .webm, .flac)',
-        );
+        setValidationError(t('errorInvalidFileType'));
         return;
       }
       setFile(incoming);
     },
-    [],
+    [t],
   );
 
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -234,14 +233,14 @@ export default function UploadZone({ onTranscriptionComplete }: UploadZoneProps)
 
         <div>
           <label className="block text-sm font-medium mb-1 opacity-80">
-            Title
+            {t('title')}
           </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={isBusy}
-            placeholder="Optional"
+            placeholder={t('optional')}
             className="w-full glass-subtle rounded-lg px-3 py-2 text-sm bg-transparent outline-none
                        focus:ring-2 focus:ring-purple-500/40 disabled:opacity-50
                        placeholder:opacity-40"
@@ -293,7 +292,7 @@ export default function UploadZone({ onTranscriptionComplete }: UploadZoneProps)
           <div className="h-1 rounded-full bg-white/10 overflow-hidden">
             <div
               className="h-full rounded-full bg-purple-500 transition-all duration-500 ease-out"
-              style={{ width: `${status === 'uploading' ? 20 : status === 'transcribing' ? 60 : 80}%` }}
+              style={{ width: `${progress}%` }}
             />
           </div>
           <p className="text-xs opacity-50 mt-2">{t('loading')}</p>

@@ -37,6 +37,8 @@ export const translations = {
   transcribe: { en: 'Transcribe', pt: 'Transcrever' },
   transcribing: { en: 'Transcribing...', pt: 'Transcrevendo...' },
   summarizing: { en: 'Summarizing...', pt: 'Resumindo...' },
+  title: { en: 'Title', pt: 'Título' },
+  optional: { en: 'Optional', pt: 'Opcional' },
   selectLanguage: { en: 'Audio Language', pt: 'Idioma do Áudio' },
   portuguese: { en: 'Portuguese', pt: 'Português' },
   english: { en: 'English', pt: 'Inglês' },
@@ -76,6 +78,10 @@ export const translations = {
   lightMode: { en: 'Light Mode', pt: 'Modo Claro' },
 
   // Errors
+  errorInvalidFileType: {
+    en: 'Invalid file type. Please upload an audio file (.mp3, .wav, .m4a, .ogg, .webm, .flac)',
+    pt: 'Tipo de arquivo inválido. Envie um arquivo de áudio (.mp3, .wav, .m4a, .ogg, .webm, .flac)',
+  },
   errorNoFile: { en: 'No file selected', pt: 'Nenhum arquivo selecionado' },
   errorUploadFailed: {
     en: 'Upload failed',
