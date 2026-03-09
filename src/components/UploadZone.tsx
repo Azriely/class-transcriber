@@ -42,6 +42,7 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
   const {
     status,
     progress,
+    message,
     error,
     uploadAndTranscribe,
     reset,
@@ -302,7 +303,7 @@ export default function UploadZone({ onTranscriptionComplete, onStatusChange }: 
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs opacity-50 mt-2">{t('loading')}</p>
+          <p className="text-xs opacity-50 mt-2">{message || t('loading')}</p>
         </div>
       )}
     </div>

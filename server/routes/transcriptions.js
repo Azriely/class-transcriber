@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import os from 'os';
 import fs from 'fs';
+import path from 'path';
 import { authenticate } from '../middleware/auth.js';
 import { transcribeAudio, summarizeTranscript } from '../services/groq.js';
 import { chunkAudioFile, cleanupChunks } from '../services/chunker.js';
@@ -14,87 +15,123 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
 });
 
+// In-memory job tracker for background transcription processing
+const jobs = new Map();
+
 // All routes require authentication
 router.use(authenticate);
 
-// POST /api/transcriptions/transcribe — upload and transcribe audio
-// Uses SSE (Server-Sent Events) to stream progress and avoid Cloudflare 524 timeouts
-router.post('/transcribe', upload.single('audio'), async (req, res) => {
-  let chunks = [];
-  const tempFile = req.file?.path;
-
+// POST /api/transcriptions/transcribe — upload audio, return job ID immediately
+router.post('/transcribe', upload.single('audio'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No audio file provided' });
   }
 
-  // Set up SSE headers to keep connection alive
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
+  const { title, language } = req.body;
+  const audioLanguage = language || 'pt';
+  const transcriptionTitle = title || req.file.originalname || 'Untitled';
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Copy uploaded file to a persistent temp location (multer may clean up)
+  const persistPath = path.join(os.tmpdir(), `transcribe-${jobId}${path.extname(req.file.originalname || '.mp3')}`);
+  fs.copyFileSync(req.file.path, persistPath);
+  try { fs.unlinkSync(req.file.path); } catch {}
+
+  // Create job
+  jobs.set(jobId, {
+    userId: req.userId,
+    status: 'processing',
+    progress: 5,
+    message: 'Queued...',
+    result: null,
+    error: null,
   });
 
-  function sendEvent(data) {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  }
+  // Return immediately
+  res.status(202).json({ jobId });
+
+  // Process in background
+  processTranscription(jobId, persistPath, req.file.originalname, audioLanguage, transcriptionTitle, req.userId, req.file.size);
+});
+
+async function processTranscription(jobId, filePath, originalName, language, title, userId, fileSize) {
+  let chunks = [];
+  const job = jobs.get(jobId);
 
   try {
-    const { title, language } = req.body;
-    const audioLanguage = language || 'pt';
-    const transcriptionTitle = title || req.file.originalname || 'Untitled';
+    job.message = 'Splitting audio...';
+    job.progress = 10;
 
-    sendEvent({ type: 'progress', message: 'Splitting audio...', progress: 5 });
+    chunks = chunkAudioFile(filePath, originalName);
 
-    chunks = chunkAudioFile(tempFile, req.file.originalname);
+    job.message = `Processing ${chunks.length} chunk(s)...`;
 
-    sendEvent({ type: 'progress', message: `Processing ${chunks.length} chunk(s)...`, progress: 10 });
-
-    // Transcribe each chunk with rate-limit delay between them
     const parts = [];
     for (let i = 0; i < chunks.length; i++) {
       if (i > 0) {
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
-      sendEvent({
-        type: 'progress',
-        message: `Transcribing chunk ${i + 1} of ${chunks.length}...`,
-        progress: 10 + Math.round((i / chunks.length) * 80),
-      });
-      const text = await transcribeAudio(chunks[i], audioLanguage, req.file.originalname, (msg) => {
-        sendEvent({ type: 'progress', message: msg, progress: 10 + Math.round((i / chunks.length) * 80) });
+
+      job.message = `Transcribing chunk ${i + 1} of ${chunks.length}...`;
+      job.progress = 10 + Math.round((i / chunks.length) * 80);
+
+      const text = await transcribeAudio(chunks[i], language, originalName, (msg) => {
+        job.message = msg;
       });
       parts.push(text);
     }
 
     const fullTranscript = parts.join(' ');
 
-    sendEvent({ type: 'progress', message: 'Saving...', progress: 95 });
+    job.message = 'Saving...';
+    job.progress = 95;
 
-    // Save to database
     const stmt = db.prepare(
       'INSERT INTO transcriptions (user_id, title, audio_language, transcript, file_size) VALUES (?, ?, ?, ?, ?)'
     );
-    const result = stmt.run(req.userId, transcriptionTitle, audioLanguage, fullTranscript, req.file.size);
+    const result = stmt.run(userId, title, language, fullTranscript, fileSize);
 
-    sendEvent({
-      type: 'complete',
+    job.status = 'complete';
+    job.progress = 100;
+    job.message = 'Done';
+    job.result = {
       id: Number(result.lastInsertRowid),
-      title: transcriptionTitle,
-      audio_language: audioLanguage,
+      title,
       transcript: fullTranscript,
-      file_size: req.file.size,
-      created_at: new Date().toISOString(),
-    });
+    };
   } catch (err) {
     console.error('Transcription error:', err);
-    sendEvent({ type: 'error', error: err.message || 'Transcription failed' });
+    job.status = 'error';
+    job.error = err.message || 'Transcription failed';
+    job.message = job.error;
   } finally {
-    cleanupChunks(chunks, tempFile);
-    if (tempFile) {
-      try { fs.unlinkSync(tempFile); } catch {}
-    }
-    res.end();
+    cleanupChunks(chunks, filePath);
+    try { fs.unlinkSync(filePath); } catch {}
+
+    // Clean up job from memory after 10 minutes
+    setTimeout(() => jobs.delete(jobId), 10 * 60 * 1000);
   }
+}
+
+// GET /api/transcriptions/jobs/:jobId — poll for transcription job status
+router.get('/jobs/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found or expired' });
+  }
+
+  // Only allow the job owner to check status
+  if (job.userId !== req.userId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  res.json({
+    status: job.status,
+    progress: job.progress,
+    message: job.message,
+    result: job.result,
+    error: job.error,
+  });
 });
 
 // POST /api/transcriptions/:id/summarize — summarize an existing transcription

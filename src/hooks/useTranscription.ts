@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { api } from '../lib/api';
 
 export type TranscriptionStatus =
@@ -19,11 +19,20 @@ interface SummarizeResponse {
   summary: string;
 }
 
+interface JobResponse {
+  status: 'processing' | 'complete' | 'error';
+  progress: number;
+  message: string;
+  result: TranscribeResult | null;
+  error: string | null;
+}
+
 interface TranscriptionState {
   status: TranscriptionStatus;
   transcript: string | null;
   summary: string | null;
   progress: number;
+  message: string | null;
   error: string | null;
   transcriptionId: number | null;
 }
@@ -33,12 +42,23 @@ const initialState: TranscriptionState = {
   transcript: null,
   summary: null,
   progress: 0,
+  message: null,
   error: null,
   transcriptionId: null,
 };
 
+const POLL_INTERVAL = 2000; // 2 seconds
+
 export function useTranscription() {
   const [state, setState] = useState<TranscriptionState>(initialState);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
   const uploadAndTranscribe = useCallback(
     async (file: File, language: string, title?: string): Promise<TranscribeResult> => {
@@ -46,6 +66,7 @@ export function useTranscription() {
         ...prev,
         status: 'uploading',
         error: null,
+        message: 'Uploading...',
         progress: 5,
       }));
 
@@ -57,89 +78,77 @@ export function useTranscription() {
       }
 
       try {
+        // Upload file and get job ID (fast response)
+        const { jobId } = await api.postMultipart<{ jobId: string }>(
+          '/transcriptions/transcribe',
+          formData,
+        );
+
         setState((prev) => ({
           ...prev,
           status: 'transcribing',
+          message: 'Processing...',
           progress: 10,
         }));
 
-        // Stream the response (SSE) to get progress updates
-        const response = await fetch('/api/transcriptions/transcribe', {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const err = await response.text();
-          throw new Error(err || 'Transcription failed');
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('No response stream');
-
-        const decoder = new TextDecoder();
-        let result: TranscribeResult | null = null;
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Parse SSE events from buffer
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
+        // Poll for job completion
+        return await new Promise<TranscribeResult>((resolve, reject) => {
+          pollRef.current = setInterval(async () => {
             try {
-              const event = JSON.parse(line.slice(6));
+              const job = await api.get<JobResponse>(
+                `/transcriptions/jobs/${jobId}`,
+              );
 
-              if (event.type === 'progress') {
-                setState((prev) => ({
-                  ...prev,
-                  progress: event.progress ?? prev.progress,
-                }));
-              } else if (event.type === 'complete') {
-                result = {
-                  id: event.id,
-                  title: event.title,
-                  transcript: event.transcript,
-                };
+              setState((prev) => ({
+                ...prev,
+                progress: job.progress,
+                message: job.message,
+              }));
+
+              if (job.status === 'complete' && job.result) {
+                stopPolling();
                 setState((prev) => ({
                   ...prev,
                   status: 'complete',
-                  transcript: event.transcript,
-                  transcriptionId: event.id,
+                  transcript: job.result!.transcript,
+                  transcriptionId: job.result!.id,
                   progress: 100,
+                  message: 'Done',
                 }));
-              } else if (event.type === 'error') {
-                throw new Error(event.error);
+                resolve(job.result);
+              } else if (job.status === 'error') {
+                stopPolling();
+                const errorMsg = job.error || 'Transcription failed';
+                setState((prev) => ({
+                  ...prev,
+                  status: 'error',
+                  error: errorMsg,
+                  message: errorMsg,
+                  progress: 0,
+                }));
+                reject(new Error(errorMsg));
               }
-            } catch (parseErr) {
-              if (parseErr instanceof SyntaxError) continue; // skip malformed lines
-              throw parseErr;
+            } catch (pollErr) {
+              // Don't stop polling on transient network errors
+              console.warn('Poll error (will retry):', pollErr);
             }
-          }
-        }
-
-        if (!result) throw new Error('No result received');
-        return result;
+          }, POLL_INTERVAL);
+        });
       } catch (err) {
+        stopPolling();
         const message =
           err instanceof Error ? err.message : 'Transcription failed';
         setState((prev) => ({
           ...prev,
           status: 'error',
           error: message,
+          message,
           progress: 0,
         }));
         throw err;
       }
     },
-    [],
+    [stopPolling],
   );
 
   const summarize = useCallback(async (transcriptionId: number) => {
@@ -147,6 +156,7 @@ export function useTranscription() {
       ...prev,
       status: 'summarizing',
       error: null,
+      message: 'Generating summary...',
       progress: 60,
     }));
 
@@ -160,6 +170,7 @@ export function useTranscription() {
         status: 'complete',
         summary: data.summary,
         progress: 100,
+        message: 'Done',
       }));
 
       return data;
@@ -170,6 +181,7 @@ export function useTranscription() {
         ...prev,
         status: 'error',
         error: message,
+        message,
         progress: 0,
       }));
       throw err;
@@ -177,8 +189,9 @@ export function useTranscription() {
   }, []);
 
   const reset = useCallback(() => {
+    stopPolling();
     setState(initialState);
-  }, []);
+  }, [stopPolling]);
 
   return {
     ...state,
