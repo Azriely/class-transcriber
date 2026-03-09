@@ -31,7 +31,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     const audioLanguage = language || 'pt';
     const transcriptionTitle = title || req.file.originalname || 'Untitled';
 
-    chunks = chunkAudioFile(tempFile);
+    chunks = chunkAudioFile(tempFile, req.file.originalname);
 
     // Transcribe each chunk with rate-limit delay between them
     const parts = [];

@@ -6,6 +6,7 @@ COPY . .
 RUN npm run build
 
 FROM node:20-alpine
+RUN apk add --no-cache ffmpeg
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
