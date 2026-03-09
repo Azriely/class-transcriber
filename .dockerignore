@@ -1,0 +1,7 @@
+node_modules
+docs
+*.test.js
+.git
+.gitignore
+.wrangler
+package.json
