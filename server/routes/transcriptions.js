@@ -134,30 +134,56 @@ router.get('/jobs/:jobId', (req, res) => {
   });
 });
 
-// POST /api/transcriptions/:id/summarize — summarize an existing transcription
-router.post('/:id/summarize', async (req, res) => {
-  try {
-    const transcription = db.prepare(
-      'SELECT * FROM transcriptions WHERE id = ? AND user_id = ?'
-    ).get(req.params.id, req.userId);
+// POST /api/transcriptions/:id/summarize — start summarization as background job
+router.post('/:id/summarize', (req, res) => {
+  const transcription = db.prepare(
+    'SELECT * FROM transcriptions WHERE id = ? AND user_id = ?'
+  ).get(req.params.id, req.userId);
 
-    if (!transcription) {
-      return res.status(404).json({ error: 'Transcription not found' });
-    }
+  if (!transcription) {
+    return res.status(404).json({ error: 'Transcription not found' });
+  }
+
+  const jobId = `sum-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  jobs.set(jobId, {
+    userId: req.userId,
+    status: 'processing',
+    progress: 10,
+    message: 'Generating summary...',
+    result: null,
+    error: null,
+  });
+
+  res.status(202).json({ jobId });
+
+  // Process in background
+  processSummarization(jobId, transcription);
+});
+
+async function processSummarization(jobId, transcription) {
+  const job = jobs.get(jobId);
+  try {
+    job.message = 'Summarizing transcript...';
+    job.progress = 30;
 
     const summary = await summarizeTranscript(transcription.transcript, transcription.audio_language);
 
     db.prepare('UPDATE transcriptions SET summary = ? WHERE id = ?').run(summary, transcription.id);
 
-    res.json({
-      id: transcription.id,
-      summary,
-    });
+    job.status = 'complete';
+    job.progress = 100;
+    job.message = 'Done';
+    job.result = { id: transcription.id, summary };
   } catch (err) {
     console.error('Summarization error:', err);
-    res.status(500).json({ error: err.message || 'Summarization failed' });
+    job.status = 'error';
+    job.error = err.message || 'Summarization failed';
+    job.message = job.error;
+  } finally {
+    setTimeout(() => jobs.delete(jobId), 10 * 60 * 1000);
   }
-});
+}
 
 // GET /api/transcriptions — list user's transcriptions
 router.get('/', (req, res) => {

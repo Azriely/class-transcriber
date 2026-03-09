@@ -76,11 +76,11 @@ export async function transcribeAudio(filePath, language = 'pt', originalName = 
   }
 }
 
-export async function summarizeTranscript(transcript, language = 'pt') {
-  const systemPrompt = language === 'pt'
-    ? 'Você é um assistente que resume aulas universitárias em português. Gere um resumo conciso com: título/tema, 5-10 pontos principais, conceitos-chave, e tarefas mencionadas.'
-    : 'You are an assistant that summarizes university lectures in English. Generate a concise summary with: title/topic, 5-10 key points, key concepts, and any assignments mentioned.';
+// ~4 chars per token rough estimate; keep well under 12k TPM free-tier limit
+const MAX_CHUNK_CHARS = 28000; // ~7000 tokens, leaves room for system prompt + response
 
+/** Call Llama chat API with retry on 429 */
+async function chatCompletion(systemPrompt, userContent) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(CHAT_URL, {
       method: 'POST',
@@ -92,7 +92,7 @@ export async function summarizeTranscript(transcript, language = 'pt') {
         model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: transcript },
+          { role: 'user', content: userContent },
         ],
         temperature: 0.3,
         max_tokens: 2048,
@@ -113,4 +113,76 @@ export async function summarizeTranscript(transcript, language = 'pt') {
     const data = await response.json();
     return data.choices[0].message.content;
   }
+}
+
+/** Split text into chunks at sentence boundaries */
+function splitTranscript(text, maxChars) {
+  if (text.length <= maxChars) return [text];
+
+  const chunks = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChars) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Find last sentence boundary within limit
+    let splitAt = remaining.lastIndexOf('. ', maxChars);
+    if (splitAt === -1 || splitAt < maxChars * 0.5) {
+      splitAt = remaining.lastIndexOf(' ', maxChars);
+    }
+    if (splitAt === -1) {
+      splitAt = maxChars;
+    } else {
+      splitAt += 1; // include the space/period
+    }
+
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+
+  return chunks;
+}
+
+export async function summarizeTranscript(transcript, language = 'pt') {
+  const chunks = splitTranscript(transcript, MAX_CHUNK_CHARS);
+
+  const chunkPrompt = language === 'pt'
+    ? 'Você é um assistente que resume aulas universitárias em português. Resuma esta parte da transcrição com os pontos principais, conceitos-chave e tarefas mencionadas.'
+    : 'You are an assistant that summarizes university lectures in English. Summarize this part of the transcript with key points, key concepts, and any assignments mentioned.';
+
+  const mergePrompt = language === 'pt'
+    ? 'Você é um assistente que resume aulas universitárias em português. Combine estes resumos parciais em um resumo final conciso com: título/tema, 5-10 pontos principais, conceitos-chave, e tarefas mencionadas.'
+    : 'You are an assistant that summarizes university lectures in English. Combine these partial summaries into one final concise summary with: title/topic, 5-10 key points, key concepts, and any assignments mentioned.';
+
+  // Single chunk — summarize directly
+  if (chunks.length === 1) {
+    const directPrompt = language === 'pt'
+      ? 'Você é um assistente que resume aulas universitárias em português. Gere um resumo conciso com: título/tema, 5-10 pontos principais, conceitos-chave, e tarefas mencionadas.'
+      : 'You are an assistant that summarizes university lectures in English. Generate a concise summary with: title/topic, 5-10 key points, key concepts, and any assignments mentioned.';
+    return chatCompletion(directPrompt, transcript);
+  }
+
+  // Multiple chunks — summarize each, then merge
+  console.log(`Transcript too long (${transcript.length} chars), splitting into ${chunks.length} chunks for summarization...`);
+
+  const partialSummaries = [];
+  for (let i = 0; i < chunks.length; i++) {
+    console.log(`Summarizing chunk ${i + 1}/${chunks.length}...`);
+
+    // Wait between calls to respect TPM limit
+    if (i > 0) {
+      await sleepWithKeepAlive(65000); // 65s to let the per-minute window reset
+    }
+
+    const summary = await chatCompletion(chunkPrompt, chunks[i]);
+    partialSummaries.push(`[Part ${i + 1}/${chunks.length}]\n${summary}`);
+  }
+
+  // Final merge pass
+  console.log('Merging partial summaries...');
+  await sleepWithKeepAlive(65000);
+  return chatCompletion(mergePrompt, partialSummaries.join('\n\n'));
 }

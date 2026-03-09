@@ -15,7 +15,8 @@ interface TranscribeResult {
   transcript: string;
 }
 
-interface SummarizeResponse {
+interface SummarizeResult {
+  id: number;
   summary: string;
 }
 
@@ -157,24 +158,57 @@ export function useTranscription() {
       status: 'summarizing',
       error: null,
       message: 'Generating summary...',
-      progress: 60,
+      progress: 10,
     }));
 
     try {
-      const data = await api.post<SummarizeResponse>(
+      const { jobId } = await api.post<{ jobId: string }>(
         `/transcriptions/${transcriptionId}/summarize`,
       );
 
-      setState((prev) => ({
-        ...prev,
-        status: 'complete',
-        summary: data.summary,
-        progress: 100,
-        message: 'Done',
-      }));
+      return await new Promise<SummarizeResult>((resolve, reject) => {
+        pollRef.current = setInterval(async () => {
+          try {
+            const job = await api.get<JobResponse>(
+              `/transcriptions/jobs/${jobId}`,
+            );
 
-      return data;
+            setState((prev) => ({
+              ...prev,
+              progress: job.progress,
+              message: job.message,
+            }));
+
+            if (job.status === 'complete' && job.result) {
+              stopPolling();
+              const result = job.result as unknown as SummarizeResult;
+              setState((prev) => ({
+                ...prev,
+                status: 'complete',
+                summary: result.summary,
+                progress: 100,
+                message: 'Done',
+              }));
+              resolve(result);
+            } else if (job.status === 'error') {
+              stopPolling();
+              const errorMsg = job.error || 'Summarization failed';
+              setState((prev) => ({
+                ...prev,
+                status: 'error',
+                error: errorMsg,
+                message: errorMsg,
+                progress: 0,
+              }));
+              reject(new Error(errorMsg));
+            }
+          } catch (pollErr) {
+            console.warn('Poll error (will retry):', pollErr);
+          }
+        }, POLL_INTERVAL);
+      });
     } catch (err) {
+      stopPolling();
       const message =
         err instanceof Error ? err.message : 'Summary generation failed';
       setState((prev) => ({
@@ -186,7 +220,7 @@ export function useTranscription() {
       }));
       throw err;
     }
-  }, []);
+  }, [stopPolling]);
 
   const reset = useCallback(() => {
     stopPolling();

@@ -13,8 +13,12 @@ interface TranscriptionResult {
   title: string;
 }
 
-interface SummarizeResponse {
-  summary: string;
+interface JobResponse {
+  status: 'processing' | 'complete' | 'error';
+  progress: number;
+  message: string;
+  result: { id: number; summary: string } | null;
+  error: string | null;
 }
 
 export default function DashboardPage() {
@@ -103,16 +107,37 @@ export default function DashboardPage() {
     if (!currentTranscription) return;
 
     setIsSummarizing(true);
+    setOrbState('summarizing');
 
     try {
-      const data = await api.post<SummarizeResponse>(
+      const { jobId } = await api.post<{ jobId: string }>(
         `/transcriptions/${currentTranscription.id}/summarize`,
       );
-      setSummary(data.summary);
+
+      // Poll for completion
+      const poll = setInterval(async () => {
+        try {
+          const job = await api.get<JobResponse>(
+            `/transcriptions/jobs/${jobId}`,
+          );
+
+          if (job.status === 'complete' && job.result) {
+            clearInterval(poll);
+            setSummary(job.result.summary);
+            setIsSummarizing(false);
+            setOrbState('complete');
+          } else if (job.status === 'error') {
+            clearInterval(poll);
+            setIsSummarizing(false);
+            setOrbState('error');
+          }
+        } catch {
+          // Transient poll error, will retry
+        }
+      }, 2000);
     } catch {
-      // Error is handled by the API layer (e.g. 401 redirect)
-    } finally {
       setIsSummarizing(false);
+      setOrbState('error');
     }
   }, [currentTranscription]);
 
