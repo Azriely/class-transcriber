@@ -1,0 +1,167 @@
+/* ============================================
+   Glassmorphism Utility Classes
+   ============================================
+   Usage: Apply .glass, .glass-strong, or .glass-subtle
+   to any element inside a [data-theme] parent.
+   ============================================ */
+
+/* --- Base glass card --- */
+
+[data-theme="dark"] .glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* --- Strong variant (more opaque) --- */
+
+[data-theme="dark"] .glass-strong {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .glass-strong {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* --- Subtle variant (very transparent) --- */
+
+[data-theme="dark"] .glass-subtle {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .glass-subtle {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+/* ============================================
+   Background Gradient Blobs
+   ============================================
+   Apply .bg-blobs to a container (typically the
+   app root). The blobs are absolutely-positioned
+   pseudo-elements, so the container needs
+   position: relative and overflow: hidden.
+   ============================================ */
+
+.bg-blobs {
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-blobs::before,
+.bg-blobs::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Purple blob */
+.bg-blobs::before {
+  width: 600px;
+  height: 600px;
+  top: -200px;
+  left: -100px;
+  animation: blob-drift-1 20s ease-in-out infinite alternate;
+}
+
+/* Blue/teal blob — uses a separate element */
+.bg-blobs::after {
+  width: 500px;
+  height: 500px;
+  bottom: -150px;
+  right: -100px;
+  animation: blob-drift-2 25s ease-in-out infinite alternate;
+}
+
+/* Dark mode blob colors */
+[data-theme="dark"] .bg-blobs::before {
+  background: radial-gradient(circle, #7c3aed 0%, transparent 70%);
+}
+
+[data-theme="dark"] .bg-blobs::after {
+  background: radial-gradient(circle, #3b82f6 0%, #06b6d4 50%, transparent 70%);
+}
+
+/* Light mode blob colors (lighter variants) */
+[data-theme="light"] .bg-blobs::before {
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.3) 0%, transparent 70%);
+}
+
+[data-theme="light"] .bg-blobs::after {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.25) 0%, rgba(6, 182, 212, 0.2) 50%, transparent 70%);
+}
+
+/* Blob animations */
+@keyframes blob-drift-1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(100px, 80px) scale(1.1);
+  }
+  100% {
+    transform: translate(50px, -30px) scale(0.95);
+  }
+}
+
+@keyframes blob-drift-2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-80px, -60px) scale(1.15);
+  }
+  100% {
+    transform: translate(-40px, 40px) scale(0.9);
+  }
+}
+
+/* ============================================
+   Theme Transition
+   ============================================
+   Smooth 300ms transition for background and
+   color changes when toggling themes.
+   ============================================ */
+
+[data-theme] {
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+[data-theme="dark"] {
+  background-color: #0a0a1a;
+  color: #ffffff;
+}
+
+[data-theme="light"] {
+  background-color: #f0f4ff;
+  color: #1a1a2e;
+}
