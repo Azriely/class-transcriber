@@ -1,0 +1,15 @@
+services:
+  class-transcriber:
+    build: .
+    ports:
+      - "8090:3000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    volumes:
+      - transcriber-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  transcriber-data:
