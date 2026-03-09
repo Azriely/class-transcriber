@@ -2,6 +2,7 @@
   "name": "class-transcriber",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Transcribe class recordings using Groq Whisper API",
   "scripts": {
     "test": "node --test js/**/*.test.js",
