@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import UploadZone from '../components/UploadZone';
 import TranscriptPanel from '../components/TranscriptPanel';
 import SummaryPanel from '../components/SummaryPanel';
+import HistorySidebar from '../components/HistorySidebar';
 import { api } from '../lib/api';
 
 interface TranscriptionResult {
@@ -19,11 +20,30 @@ export default function DashboardPage() {
     useState<TranscriptionResult | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleTranscriptionComplete = useCallback(
     (data: { id: number; transcript: string; title: string }) => {
       setCurrentTranscription(data);
       setSummary(null);
+      setRefreshTrigger((prev) => prev + 1);
+    },
+    [],
+  );
+
+  const handleHistorySelect = useCallback(
+    (transcription: {
+      id: number;
+      title: string;
+      transcript: string;
+      summary: string | null;
+    }) => {
+      setCurrentTranscription({
+        id: transcription.id,
+        transcript: transcription.transcript,
+        title: transcription.title,
+      });
+      setSummary(transcription.summary);
     },
     [],
   );
@@ -46,18 +66,28 @@ export default function DashboardPage() {
   }, [currentTranscription]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <UploadZone onTranscriptionComplete={handleTranscriptionComplete} />
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col gap-6">
+        <UploadZone onTranscriptionComplete={handleTranscriptionComplete} />
 
-      {currentTranscription && (
-        <TranscriptPanel
-          transcript={currentTranscription.transcript}
-          onGenerateSummary={handleGenerateSummary}
-          isSummarizing={isSummarizing}
-        />
-      )}
+        {currentTranscription && (
+          <TranscriptPanel
+            transcript={currentTranscription.transcript}
+            onGenerateSummary={handleGenerateSummary}
+            isSummarizing={isSummarizing}
+          />
+        )}
 
-      {summary && <SummaryPanel summary={summary} />}
+        {summary && <SummaryPanel summary={summary} />}
+      </div>
+
+      {/* Sidebar */}
+      <HistorySidebar
+        onSelect={handleHistorySelect}
+        activeId={currentTranscription?.id}
+        refreshTrigger={refreshTrigger}
+      />
     </div>
   );
 }
