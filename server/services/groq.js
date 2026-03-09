@@ -6,8 +6,18 @@ const CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const MAX_RETRIES = 5;
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/** Sleep with periodic keep-alive callback (every 15s) to prevent connection timeouts */
+async function sleepWithKeepAlive(ms, onKeepAlive) {
+  const interval = 15000; // ping every 15 seconds
+  let remaining = ms;
+  while (remaining > 0) {
+    const wait = Math.min(remaining, interval);
+    await new Promise(resolve => setTimeout(resolve, wait));
+    remaining -= wait;
+    if (remaining > 0 && onKeepAlive) {
+      onKeepAlive(Math.round(remaining / 1000));
+    }
+  }
 }
 
 /** Parse retry-after from 429 response, or use exponential backoff */
@@ -21,7 +31,13 @@ function getRetryDelay(response, attempt) {
   return Math.min(30000 * Math.pow(2, attempt), 480000);
 }
 
-export async function transcribeAudio(filePath, language = 'pt', originalName = 'audio.mp3') {
+/**
+ * @param {string} filePath
+ * @param {string} language
+ * @param {string} originalName
+ * @param {function} [onProgress] - Called with status messages during retries
+ */
+export async function transcribeAudio(filePath, language = 'pt', originalName = 'audio.mp3', onProgress = null) {
   const ext = originalName.match(/\.[^.]+$/)?.[0] || '.mp3';
   const fileBuffer = fs.readFileSync(filePath);
   const blob = new Blob([fileBuffer]);
@@ -41,8 +57,14 @@ export async function transcribeAudio(filePath, language = 'pt', originalName = 
 
     if (response.status === 429 && attempt < MAX_RETRIES) {
       const delay = getRetryDelay(response, attempt);
-      console.log(`Rate limited on Whisper API. Waiting ${Math.round(delay / 1000)}s before retry ${attempt + 1}/${MAX_RETRIES}...`);
-      await sleep(delay);
+      const delaySec = Math.round(delay / 1000);
+      console.log(`Rate limited on Whisper API. Waiting ${delaySec}s before retry ${attempt + 1}/${MAX_RETRIES}...`);
+
+      if (onProgress) onProgress(`Rate limited — waiting ${delaySec}s before retry...`);
+
+      await sleepWithKeepAlive(delay, (remainingSec) => {
+        if (onProgress) onProgress(`Rate limited — retrying in ${remainingSec}s...`);
+      });
       continue;
     }
 
@@ -80,7 +102,7 @@ export async function summarizeTranscript(transcript, language = 'pt') {
     if (response.status === 429 && attempt < MAX_RETRIES) {
       const delay = getRetryDelay(response, attempt);
       console.log(`Rate limited on Llama API. Waiting ${Math.round(delay / 1000)}s before retry ${attempt + 1}/${MAX_RETRIES}...`);
-      await sleep(delay);
+      await sleepWithKeepAlive(delay);
       continue;
     }
 

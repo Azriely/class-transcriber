@@ -60,7 +60,9 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
         message: `Transcribing chunk ${i + 1} of ${chunks.length}...`,
         progress: 10 + Math.round((i / chunks.length) * 80),
       });
-      const text = await transcribeAudio(chunks[i], audioLanguage, req.file.originalname);
+      const text = await transcribeAudio(chunks[i], audioLanguage, req.file.originalname, (msg) => {
+        sendEvent({ type: 'progress', message: msg, progress: 10 + Math.round((i / chunks.length) * 80) });
+      });
       parts.push(text);
     }
 
