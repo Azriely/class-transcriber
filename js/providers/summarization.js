@@ -30,7 +30,7 @@ Lecture transcript:
 ${transcript}`;
   }
 
-  async summarize(transcript, language = 'pt') {
+  async summarize(transcript, language = 'pt', signal) {
     const response = await fetch(this.baseUrl, {
       method: 'POST',
       headers: {
@@ -45,6 +45,7 @@ ${transcript}`;
         temperature: 0.3,
         max_tokens: 2048,
       }),
+      signal,
     });
 
     if (!response.ok) {

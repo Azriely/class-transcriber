@@ -38,10 +38,14 @@ export function formatDate(isoString) {
  */
 export function generateFileName(title, type) {
   const slug = title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip combining marks (accents)
     .toLowerCase()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
-  return `${slug}-${type}.txt`;
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `${slug || 'transcription'}-${type}.txt`;
 }
 
 /**
@@ -51,7 +55,11 @@ export function generateFileName(title, type) {
  * @returns {boolean}
  */
 export function isAudioFile(file) {
-  return file.type.startsWith('audio/') || file.type === 'video/mp4';
+  if (file.type && (file.type.startsWith('audio/') || file.type === 'video/mp4')) {
+    return true;
+  }
+  const ext = (file.name || '').split('.').pop().toLowerCase();
+  return ['mp3', 'm4a', 'wav', 'ogg', 'webm', 'mp4', 'aac', 'flac'].includes(ext);
 }
 
 /**

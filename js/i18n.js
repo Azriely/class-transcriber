@@ -30,6 +30,7 @@ const translations = {
       apiKeyPlaceholder: 'Enter your Groq API key',
       apiKeyHelp: 'Get a free API key at',
       save: 'Save',
+      saved: 'Settings saved',
       language: 'Audio Language',
     },
     history: {
@@ -41,11 +42,19 @@ const translations = {
       chunk: 'Processing chunk {current} of {total}',
       summarizing: 'Generating summary...',
       cancel: 'Cancel',
+      generating: 'Generating...',
     },
     error: {
       noApiKey: 'Please set your Groq API key in settings',
       uploadFailed: 'Upload failed. Please try again.',
       transcriptionFailed: 'Transcription failed',
+      largeFile: 'Large file detected. Transcription may take several minutes.',
+      rateLimited: 'Rate limited, retrying...',
+      noSpeech: 'No speech detected in audio',
+      copyFailed: 'Copy failed',
+    },
+    success: {
+      copied: 'Copied!',
     },
   },
   pt: {
@@ -79,6 +88,7 @@ const translations = {
       apiKeyPlaceholder: 'Digite sua chave API do Groq',
       apiKeyHelp: 'Obtenha uma chave API gratuita em',
       save: 'Salvar',
+      saved: 'Configurações salvas',
       language: 'Idioma do Áudio',
     },
     history: {
@@ -90,11 +100,19 @@ const translations = {
       chunk: 'Processando parte {current} de {total}',
       summarizing: 'Gerando resumo...',
       cancel: 'Cancelar',
+      generating: 'Gerando...',
     },
     error: {
       noApiKey: 'Por favor, configure sua chave API do Groq nas configurações',
       uploadFailed: 'Falha no envio. Por favor, tente novamente.',
       transcriptionFailed: 'Falha na transcrição',
+      largeFile: 'Arquivo grande detectado. A transcrição pode levar vários minutos.',
+      rateLimited: 'Limite de requisições atingido, tentando novamente...',
+      noSpeech: 'Nenhuma fala detectada no áudio',
+      copyFailed: 'Falha ao copiar',
+    },
+    success: {
+      copied: 'Copiado!',
     },
   },
 };

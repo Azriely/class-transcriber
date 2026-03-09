@@ -22,6 +22,18 @@ describe('utils', () => {
     assert.ok(name.endsWith('.txt'));
   });
 
+  it('handles Portuguese characters in file names', () => {
+    const name = generateFileName('Introdução à Física', 'transcript');
+    assert.ok(name.includes('introducao'));
+    assert.ok(name.includes('fisica'));
+  });
+
+  it('identifies audio files by extension when type is empty', () => {
+    assert.equal(isAudioFile({ type: '', name: 'recording.mp3' }), true);
+    assert.equal(isAudioFile({ type: '', name: 'audio.m4a' }), true);
+    assert.equal(isAudioFile({ type: '', name: 'document.pdf' }), false);
+  });
+
   it('identifies audio files', () => {
     assert.equal(isAudioFile({ type: 'audio/mpeg' }), true);
     assert.equal(isAudioFile({ type: 'audio/wav' }), true);

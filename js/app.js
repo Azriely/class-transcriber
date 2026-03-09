@@ -78,7 +78,7 @@ function handleFileSelect(file) {
 
   // File size warning for large files (> 200MB)
   if (file.size > 200 * 1024 * 1024) {
-    showToast('Large file detected. Transcription may take several minutes.', 'toast-error');
+    showToast(state.i18n.t('error.largeFile'), 'toast-error');
   }
 }
 
@@ -93,18 +93,18 @@ function clearFile() {
 
 // ── Transcription ───────────────────────────────────────────────────
 
-async function transcribeChunkWithRetry(provider, chunk, language, fileName, chunkIndex, totalChunks) {
+async function transcribeChunkWithRetry(provider, chunk, language, fileName, chunkIndex, totalChunks, signal) {
   const retryDelays = [2000, 5000, 10000];
   let lastError = null;
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
     try {
-      return await provider.transcribe(chunk, language, fileName);
+      return await provider.transcribe(chunk, language, fileName, signal);
     } catch (err) {
       lastError = err;
       const is429 = err.message && err.message.includes('(429)');
       if (is429 && attempt < retryDelays.length) {
-        $('#progress-text').textContent = 'Rate limited, retrying...';
+        $('#progress-text').textContent = state.i18n.t('error.rateLimited');
         await delay(retryDelays[attempt]);
         // Restore chunk progress text after retry wait
         $('#progress-text').textContent = state.i18n.t('progress.chunk')
@@ -120,14 +120,14 @@ async function transcribeChunkWithRetry(provider, chunk, language, fileName, chu
 
 async function startTranscription() {
   if (!state.settings.groqApiKey) {
-    showToast('Please set your Groq API key in Settings', 'toast-error');
+    showToast(state.i18n.t('error.noApiKey'), 'toast-error');
     openSettings();
     return;
   }
 
   const transcribeBtn = $('#transcribe-btn');
   transcribeBtn.disabled = true;
-  transcribeBtn.textContent = 'Transcribing...';
+  transcribeBtn.textContent = state.i18n.t('progress.transcribing');
 
   state.isTranscribing = true;
   state.abortController = new AbortController();
@@ -161,6 +161,7 @@ async function startTranscription() {
         state.selectedFile.name,
         i,
         chunks.length,
+        state.abortController.signal,
       );
       results.push(text);
 
@@ -179,7 +180,7 @@ async function startTranscription() {
 
     // Check for empty transcription
     if (!state.currentTranscript.trim()) {
-      showToast('No speech detected in audio', 'toast-error');
+      showToast(state.i18n.t('error.noSpeech'), 'toast-error');
       restoreUploadUI();
       return;
     }
@@ -195,6 +196,8 @@ async function startTranscription() {
       summary: '',
       date: new Date().toISOString(),
     });
+    const history = getHistory();
+    state.currentHistoryId = history[0].id; // most recent is first
     renderHistory();
 
     // Auto-scroll to transcript section
@@ -234,14 +237,14 @@ function cancelTranscription() {
 
 async function startSummarization() {
   if (!state.settings.groqApiKey) {
-    showToast('Please set your Groq API key in Settings', 'toast-error');
+    showToast(state.i18n.t('error.noApiKey'), 'toast-error');
     openSettings();
     return;
   }
 
   const summarizeBtn = $('#summarize-btn');
   summarizeBtn.disabled = true;
-  summarizeBtn.textContent = 'Generating...';
+  summarizeBtn.textContent = state.i18n.t('progress.generating');
   state.isSummarizing = true;
 
   try {
@@ -249,6 +252,7 @@ async function startSummarization() {
     const summary = await provider.summarize(
       state.currentTranscript,
       state.settings.audioLanguage,
+      state.abortController ? state.abortController.signal : undefined,
     );
     state.currentSummary = summary;
 
@@ -256,10 +260,8 @@ async function startSummarization() {
     $('#summary-text').textContent = summary;
 
     // Update the history entry with the summary using storage module
-    const history = getHistory();
-    const entry = history.find(h => h.title === state.currentTitle);
-    if (entry) {
-      updateHistoryItem(entry.id, { summary });
+    if (state.currentHistoryId) {
+      updateHistoryItem(state.currentHistoryId, { summary });
     }
   } catch (err) {
     // Keep transcript visible and intact if summarization fails
@@ -310,13 +312,24 @@ function renderHistory() {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-icon-sm btn-delete';
     deleteBtn.title = 'Delete';
-    deleteBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="3 6 5 6 21 6"/>
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6"/>
-      <path d="M14 11v6"/>
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-    </svg>`;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line1.setAttribute('x1', '18'); line1.setAttribute('y1', '6');
+    line1.setAttribute('x2', '6'); line1.setAttribute('y2', '18');
+    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line2.setAttribute('x1', '6'); line2.setAttribute('y1', '6');
+    line2.setAttribute('x2', '18'); line2.setAttribute('y2', '18');
+    svg.appendChild(line1);
+    svg.appendChild(line2);
+    deleteBtn.appendChild(svg);
 
     div.appendChild(infoDiv);
     div.appendChild(deleteBtn);
@@ -332,6 +345,7 @@ function loadHistoryItem(id) {
   state.currentTranscript = item.transcript;
   state.currentSummary = item.summary || '';
   state.currentTitle = item.title;
+  state.currentHistoryId = item.id;
   state.selectedFile = null;
 
   $('#upload-zone').setAttribute('hidden', '');
@@ -377,7 +391,7 @@ function handleSaveSettings() {
   state.settings.audioLanguage = $('#audio-lang-select').value;
   saveSettings(state.settings);
   closeSettings();
-  showToast(state.i18n.t('settings.save'), 'toast-success');
+  showToast(state.i18n.t('settings.saved'), 'toast-success');
 }
 
 function toggleApiKeyVisibility() {
@@ -458,9 +472,9 @@ function bindEvents() {
   $('#copy-transcript-btn').addEventListener('click', async () => {
     try {
       await copyToClipboard(state.currentTranscript);
-      showToast('Copied!', 'toast-success');
+      showToast(state.i18n.t('success.copied'), 'toast-success');
     } catch {
-      showToast('Copy failed', 'toast-error');
+      showToast(state.i18n.t('error.copyFailed'), 'toast-error');
     }
   });
   $('#download-transcript-btn').addEventListener('click', () => {
@@ -472,9 +486,9 @@ function bindEvents() {
   $('#copy-summary-btn').addEventListener('click', async () => {
     try {
       await copyToClipboard(state.currentSummary);
-      showToast('Copied!', 'toast-success');
+      showToast(state.i18n.t('success.copied'), 'toast-success');
     } catch {
-      showToast('Copy failed', 'toast-error');
+      showToast(state.i18n.t('error.copyFailed'), 'toast-error');
     }
   });
   $('#download-summary-btn').addEventListener('click', () => {

@@ -31,7 +31,14 @@ export function saveTranscription({ title, transcript, summary, date }) {
   const history = getHistory();
   const id = Date.now().toString(36) + '-' + (idCounter++);
   history.unshift({ id, title, transcript, summary, date });
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch (e) {
+    if (e.name === 'QuotaExceededError') {
+      throw new Error('Storage full. Please delete old transcriptions to make room.');
+    }
+    throw e;
+  }
 }
 
 export function updateHistoryItem(id, updates) {
@@ -39,7 +46,14 @@ export function updateHistoryItem(id, updates) {
   const index = history.findIndex(item => item.id === id);
   if (index === -1) return;
   history[index] = { ...history[index], ...updates };
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch (e) {
+    if (e.name === 'QuotaExceededError') {
+      throw new Error('Storage full. Please delete old transcriptions to make room.');
+    }
+    throw e;
+  }
 }
 
 export function deleteHistoryItem(id) {

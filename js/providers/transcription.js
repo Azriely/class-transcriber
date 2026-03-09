@@ -9,7 +9,7 @@ export class GroqWhisperProvider {
     return { model: this.model, language };
   }
 
-  async transcribe(audioBlob, language = 'pt', fileName = 'audio.mp3') {
+  async transcribe(audioBlob, language = 'pt', fileName = 'audio.mp3', signal) {
     const formData = new FormData();
     formData.append('file', audioBlob, fileName);
     formData.append('model', this.model);
@@ -20,6 +20,7 @@ export class GroqWhisperProvider {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.apiKey}` },
       body: formData,
+      signal,
     });
 
     if (!response.ok) {
